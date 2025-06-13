@@ -30,11 +30,24 @@ pipeline {
             }
         }
         
+        stage('Install AWS IAM Authenticator') {
+            steps {
+                sh '''
+                curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
+                chmod +x ./aws-iam-authenticator
+                mkdir -p $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$PATH:$HOME/bin
+                aws-iam-authenticator version
+                kubectl version --client
+                '''
+            }
+        }
+        
         stage('Deploy to EKS') {
             steps {
                 sh '''
                 export AWS_ACCESS_KEY_ID=${AWS_CREDENTIALS_USR}
                 export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
+                export PATH=$PATH:$HOME/bin
                 sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}|g" k8s-deployment.yaml
                 export KUBECONFIG=${KUBECONFIG}
                 kubectl apply -f k8s-deployment.yaml --validate=false
