@@ -65,20 +65,24 @@ pipeline {
                 export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
                 export PATH=$HOME/bin:$PATH
                 
-                # Generate kubeconfig using AWS CLI
+                # Generate kubeconfig using AWS CLI with explicit credentials
                 mkdir -p $HOME/.kube
                 aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME} --kubeconfig $HOME/.kube/config
                 
-                # Verify the kubeconfig
-                cat $HOME/.kube/config
+                # Set proper permissions for kubeconfig
+                chmod 600 $HOME/.kube/config
                 
+                # Export kubeconfig path
                 export KUBECONFIG=$HOME/.kube/config
+                
+                # Verify connection to cluster with token
+                aws eks get-token --cluster-name ${EKS_CLUSTER_NAME} --region ${AWS_REGION}
                 
                 # Update the deployment file with the new image
                 sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}|g" k8s-deployment.yaml
                 
-                # Apply the deployment
-                kubectl apply -f k8s-deployment.yaml --validate=false
+                # Apply the deployment with token authentication
+                kubectl apply -f k8s-deployment.yaml
                 '''
             }
         }
