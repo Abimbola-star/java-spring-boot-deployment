@@ -24,7 +24,7 @@ pipeline {
                 export AWS_ACCESS_KEY_ID=${AWS_CREDENTIALS_USR}
                 export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
                 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} -f backend/Dockerfile .
+                cd backend && docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} .
                 docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
                 '''
             }
