@@ -2,58 +2,58 @@ pipeline {
     agent any
     
     environment {
-        AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
+        AWS_ACCOUNT_ID = credentials('aws-account-id')
         AWS_REGION = 'us-east-1'
-        ECR_REPOSITORY = 'ecommerce-api'
-        ECR_REPOSITORY_URI = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPOSITORY}"
+        ECR_REPO = 'ecommerce'
+        IMAGE_TAG = "v${BUILD_NUMBER}"
         KUBECONFIG = credentials('eks-kubeconfig')
+        AWS_CREDENTIALS = credentials('aws-credentials')
     }
     
     stages {
         stage('Checkout') {
             steps {
-                checkout scm
+                git branch: 'dev', url: 'https://github.com/Abimbola-star/java-spring-boot-deployment.git'
             }
         }
         
         stage('Build') {
             steps {
-                dir('backend') {
-                    sh 'mvn clean package -DskipTests'
-                }
-            }
-        }
-        
-        stage('Test') {
-            steps {
-                dir('backend') {
-                    sh 'mvn test'
-                }
+                sh 'mvn clean package'
             }
         }
         
         stage('Build and Push Docker Image') {
             steps {
-                sh "aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
-                sh "docker build -t ${ECR_REPOSITORY_URI}:${env.BUILD_NUMBER} -t ${ECR_REPOSITORY_URI}:latest ."
-                sh "docker push ${ECR_REPOSITORY_URI}:${env.BUILD_NUMBER}"
-                sh "docker push ${ECR_REPOSITORY_URI}:latest"
+                sh '''
+                export AWS_ACCESS_KEY_ID=${AWS_CREDENTIALS_USR}
+                export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
+                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                docker build -t ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG} .
+                docker push ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}
+                '''
             }
         }
         
         stage('Deploy to EKS') {
             steps {
-                sh "sed -i 's|\${ECR_REPOSITORY_URI}|${ECR_REPOSITORY_URI}|g' kubernetes/deployment.yaml"
-                sh "kubectl --kubeconfig=${KUBECONFIG} apply -f kubernetes/deployment.yaml"
-                sh "kubectl --kubeconfig=${KUBECONFIG} apply -f kubernetes/service.yaml"
-                sh "kubectl --kubeconfig=${KUBECONFIG} apply -f kubernetes/ingress.yaml"
+                sh '''
+                export AWS_ACCESS_KEY_ID=${AWS_CREDENTIALS_USR}
+                export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
+                sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}|g" k8s-deployment.yaml
+                export KUBECONFIG=${KUBECONFIG}
+                kubectl apply -f k8s-deployment.yaml
+                '''
             }
         }
     }
     
     post {
-        always {
-            cleanWs()
+        success {
+            echo 'Deployment successful!'
+        }
+        failure {
+            echo 'Deployment failed!'
         }
     }
 }

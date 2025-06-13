@@ -1,0 +1,30 @@
+server:
+  persistentVolume:
+    enabled: true
+    size: 8Gi
+  service:
+    type: ClusterIP
+
+alertmanager:
+  persistentVolume:
+    enabled: true
+    size: 2Gi
+  service:
+    type: ClusterIP
+
+grafana:
+  adminPassword: admin
+  persistence:
+    enabled: true
+    size: 5Gi
+  service:
+    type: ClusterIP
+  
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+    path: /grafana
+    pathType: Prefix
