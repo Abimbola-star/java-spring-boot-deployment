@@ -37,7 +37,7 @@ pipeline {
                 export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
                 sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}|g" k8s-deployment.yaml
                 export KUBECONFIG=${KUBECONFIG}
-                kubectl apply -f k8s-deployment.yaml
+                kubectl apply -f k8s-deployment.yaml --validate=false
                 '''
             }
         }
