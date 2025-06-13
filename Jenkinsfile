@@ -8,6 +8,7 @@ pipeline {
         IMAGE_TAG = "v${BUILD_NUMBER}"
         KUBECONFIG = credentials('eks-kubeconfig')
         AWS_CREDENTIALS = credentials('aws-credentials')
+        EKS_CLUSTER_NAME = 'eks-javaecomm-cluster'
     }
     
     stages {
@@ -33,11 +34,26 @@ pipeline {
         stage('Install AWS IAM Authenticator') {
             steps {
                 sh '''
-                curl -o aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.21.2/2021-07-05/bin/linux/amd64/aws-iam-authenticator
+                # Detect architecture
+                ARCH=$(uname -m)
+                if [ "$ARCH" = "x86_64" ]; then
+                    AUTH_ARCH="amd64"
+                elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
+                    AUTH_ARCH="arm64"
+                else
+                    echo "Unsupported architecture: $ARCH"
+                    exit 1
+                fi
+                
+                # Install AWS IAM Authenticator
+                curl -Lo aws-iam-authenticator https://amazon-eks.s3.us-west-2.amazonaws.com/1.21.2/2021-07-05/bin/linux/${AUTH_ARCH}/aws-iam-authenticator
                 chmod +x ./aws-iam-authenticator
-                mkdir -p $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$PATH:$HOME/bin
-                aws-iam-authenticator version
+                mkdir -p $HOME/bin
+                mv ./aws-iam-authenticator $HOME/bin/
+                
+                # Verify installations
                 kubectl version --client
+                $HOME/bin/aws-iam-authenticator version
                 '''
             }
         }
@@ -47,9 +63,21 @@ pipeline {
                 sh '''
                 export AWS_ACCESS_KEY_ID=${AWS_CREDENTIALS_USR}
                 export AWS_SECRET_ACCESS_KEY=${AWS_CREDENTIALS_PSW}
-                export PATH=$PATH:$HOME/bin
+                export PATH=$HOME/bin:$PATH
+                
+                # Generate kubeconfig using AWS CLI
+                mkdir -p $HOME/.kube
+                aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER_NAME} --kubeconfig $HOME/.kube/config
+                
+                # Verify the kubeconfig
+                cat $HOME/.kube/config
+                
+                export KUBECONFIG=$HOME/.kube/config
+                
+                # Update the deployment file with the new image
                 sed -i "s|image: .*|image: ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${ECR_REPO}:${IMAGE_TAG}|g" k8s-deployment.yaml
-                export KUBECONFIG=${KUBECONFIG}
+                
+                # Apply the deployment
                 kubectl apply -f k8s-deployment.yaml --validate=false
                 '''
             }
